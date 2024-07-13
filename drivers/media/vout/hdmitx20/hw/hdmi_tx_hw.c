@@ -101,11 +101,19 @@ static void audio_mute_op(bool flag);
 /* VSYNC polarity: active high */
 #define VSYNC_POLARITY	 1
 /* Pixel format: 0=RGB444; 1=YCbCr444; 2=Rsrv; 3=YCbCr422. */
-#define TX_INPUT_COLOR_FORMAT   HDMI_COLORSPACE_YUV444
+// #define TX_INPUT_COLOR_FORMAT   HDMI_COLORSPACE_YUV444
 /* Pixel range: 0=16-235/240; 1=16-240; 2=1-254; 3=0-255. */
 #define TX_INPUT_COLOR_RANGE	0
 /* Pixel bit width: 4=24-bit; 5=30-bit; 6=36-bit; 7=48-bit. */
 #define TX_COLOR_DEPTH		 COLORDEPTH_24B
+
+static uint tx_input_color_format = HDMI_COLORSPACE_YUV444;
+module_param(tx_input_color_format, uint, 0664);
+MODULE_PARM_DESC(tx_input_color_format, "\n tx_input_color_format\n");
+
+static bool force_disable_csc = true;
+module_param(force_disable_csc, bool, 0664);
+MODULE_PARM_DESC(force_disable_csc, "\n force_disable_csc\n");
 
 static pf_callback earc_hdmitx_hpdst;
 
@@ -2177,7 +2185,7 @@ void hdmitx_set_enc_hw(struct hdmitx_dev *hdev)
 	}
 	/* [ 3: 2] chroma_dnsmp. 0=use pixel 0; 1=use pixel 1; 2=use average. */
 	/* [	5] hdmi_dith_md: random noise selector. */
-	hd_write_reg(P_VPU_HDMI_FMT_CTRL, (((TX_INPUT_COLOR_FORMAT ==
+	hd_write_reg(P_VPU_HDMI_FMT_CTRL, (((tx_input_color_format ==
 			HDMI_COLORSPACE_YUV420) ? 2 : 0)  << 0) | (2 << 2) |
 				(0 << 4) | /* [4]dith_en: disable dithering */
 				(0	<< 5) |
@@ -2312,10 +2320,10 @@ static int hdmitx_set_dispmode(struct hdmitx_hw_common *tx_hw)
 			    strstr(tx_comm->fmt_attr, "420") == NULL &&
 			    strstr(tx_comm->fmt_attr, "422") == NULL &&
 			    strstr(tx_comm->fmt_attr, "444") == NULL) {
-				if (is_hdmi4k_support_420(para->vic & 0xff)) {
-					para->cs = HDMI_COLORSPACE_YUV420;
-					HDMITX_INFO("display colour subsampling is forced to %s because of current video information code %d\n", colour_sampling[para->cs], para->vic);
-				}
+				// if (is_hdmi4k_support_420(para->vic & 0xff)) {
+				// 	para->cs = HDMI_COLORSPACE_YUV420;
+				// 	HDMITX_INFO("display colour subsampling is forced to %s because of current video information code %d\n", colour_sampling[para->cs], para->vic);
+				// }
 				HDMITX_INFO("display colour subsampling is auto set to %s (VIC: %d)\n", colour_sampling[para->cs], para->vic);
 			}
 			break;
@@ -2369,7 +2377,7 @@ static int hdmitx_set_dispmode(struct hdmitx_hw_common *tx_hw)
 			} else {
 				if (hdev->tx_comm.rxcap.ColorDeepSupport & 0x78 && para->cs != HDMI_COLORSPACE_YUV420) {
 					enum hdmi_color_depth cd;
-					for (cd = COLORDEPTH_30B; cd >= COLORDEPTH_24B; cd--) {
+					for (cd = COLORDEPTH_36B; cd >= COLORDEPTH_24B; cd--) {
 						if (hdev->tx_comm.rxcap.ColorDeepSupport & (1 << (cd - 1))) {
 							para->cd = cd;
 							break;
@@ -2382,13 +2390,13 @@ static int hdmitx_set_dispmode(struct hdmitx_hw_common *tx_hw)
 						para->cd = COLORDEPTH_24B;
 				}
 
-				if (is_hdmi4k_support_420(para->vic & 0xff)) {
-					if (para->cs == HDMI_COLORSPACE_RGB || para->cs == HDMI_COLORSPACE_YUV444) {
-						para->cd = COLORDEPTH_24B;
-						HDMITX_INFO("display colourdepth is forced to %d bits because of current video information code\n",
-							colour_depths[para->cd - COLORDEPTH_24B]);
-					}
-				}
+				// if (is_hdmi4k_support_420(para->vic & 0xff)) {
+				// 	if (para->cs == HDMI_COLORSPACE_RGB || para->cs == HDMI_COLORSPACE_YUV444) {
+				// 		para->cd = COLORDEPTH_24B;
+				// 		HDMITX_INFO("display colourdepth is forced to %d bits because of current video information code\n",
+				// 			colour_depths[para->cd - COLORDEPTH_24B]);
+				// 	}
+				// }
 				HDMITX_INFO("display colourdepth is auto set to %d bits (VIC: %d)\n",
 					colour_depths[para->cd - COLORDEPTH_24B], para->vic);
 			}
@@ -5052,7 +5060,7 @@ static int hdmitx_hdmi_dvi_config(struct hdmitx20_hw *tx_hw,
 		unsigned int dvi_mode)
 {
 	if (dvi_mode == 1) {
-		hdmitx_csc_config(TX_INPUT_COLOR_FORMAT,
+		hdmitx_csc_config(tx_input_color_format,
 				  HDMI_COLORSPACE_RGB, TX_COLOR_DEPTH);
 
 		/* set dvi flag */
@@ -6225,6 +6233,9 @@ static void config_hdmi20_tx(enum hdmi_vic vic,
 
 	/* Configure Color Space Converter */
 	csc_en  = (input_color_format != output_color_format) ? 1 : 0;
+	if (force_disable_csc){
+		csc_en = 0;
+	}
 
 	data32  = 0;
 	data32 |= (csc_en   << 0);
@@ -6807,6 +6818,10 @@ static void hdmitx_csc_config(unsigned char input_color_format,
 		(output_color_format == HDMI_COLORSPACE_RGB)) &&
 		(input_color_format  != output_color_format)) ? 1 : 0;
 
+	if (force_disable_csc){
+		conv_en = 0;
+	}
+	
 	if (conv_en) {
 		if (output_color_format == HDMI_COLORSPACE_RGB) {
 			csc_coeff_a1 = 0x2000;
@@ -6933,7 +6948,7 @@ static void hdmitx_set_hw(struct hdmitx_dev *hdev)
 
 	config_hdmi20_tx(para->vic, hdev,
 			para->cd,
-			TX_INPUT_COLOR_FORMAT,
+			tx_input_color_format,
 			para->cs);
 }
 

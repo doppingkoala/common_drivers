@@ -939,8 +939,8 @@ void meson_hdmitx_reset(struct drm_connector *connector)
 	hdmitx_state->base.content_protection = am_hdmi_info.hdcp_request_content_protection;
 
 	hdmitx_state->pref_hdr_policy = MESON_PREF_DV;
-	hdmitx_state->color_attr_para.colorformat = HDMI_COLORSPACE_YUV444;
-	hdmitx_state->color_attr_para.bitdepth = 10;
+	hdmitx_state->color_attr_para.colorformat = HDMI_COLORSPACE_YUV422;
+	hdmitx_state->color_attr_para.bitdepth = 12;
 
 	/*drm api need update state, so need delay attach when create state.*/
 	if (!connector->max_bpc_property)

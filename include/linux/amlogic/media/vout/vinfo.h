@@ -361,6 +361,7 @@ struct vout_device_s {
 	void (*get_attr)(char attr[16]);
 	void (*setup_attr)(const char *buf);
 	void (*video_mute)(unsigned int flag);
+	void (*send_tvled_DV_vsif)(void);
 };
 
 #define LATENCY_INVALID_UNKNOWN	0

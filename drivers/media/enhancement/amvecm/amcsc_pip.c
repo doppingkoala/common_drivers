@@ -43,6 +43,10 @@ static uint slice_set = 0x14;
 module_param(slice_set, uint, 0664);
 MODULE_PARM_DESC(slice_set, "\n slice_set\n");
 
+static bool DV_vsif_send_in_hdmi_packet = false;
+module_param(DV_vsif_send_in_hdmi_packet, bool, 0664);
+MODULE_PARM_DESC(DV_vsif_send_in_hdmi_packet, "\n DV_vsif_send_in_hdmi_packet\n");
+
 #define INORM	50000
 static u32 bt2020_primaries[3][2] = {
 	{0.17 * INORM + 0.5, 0.797 * INORM + 0.5},	/* G */
@@ -2506,6 +2510,10 @@ void hdmi_packet_process(int signal_change_flag,
 	case UNKNOWN_FMT:
 	case BT2100_IPT:
 		/* handle by dolby vision */
+		return;
+	}
+
+	if (DV_vsif_send_in_hdmi_packet){
 		return;
 	}
 

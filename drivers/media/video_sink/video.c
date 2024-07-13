@@ -5494,7 +5494,7 @@ bool check_av1_hdr10p(char *p)
 }
 EXPORT_SYMBOL(check_av1_hdr10p);
 
-static char *check_media_sei(char *sei, u32 sei_size, u32 fmt_type, u32 *ret_size)
+char *check_media_sei(char *sei, u32 sei_size, u32 fmt_type, u32 *ret_size)
 {
 	char *ret = NULL;
 	char *p, *cur_p;
