@@ -542,7 +542,6 @@ bool is_vpp2(u8 layer_id);
 int get_receiver_id(u8 layer_id);
 int proc_lowlatency_frame(u8 instance_id);
 bool check_av1_hdr10p(char *p);
-char *check_media_sei(char *sei, u32 sei_size, u32 fmt_type, u32 *ret_size);
 int get_output_pcrscr_info(s32 *inc, u32 *base);
 void  get_video_input_info(struct video_input_info *input_info);
 

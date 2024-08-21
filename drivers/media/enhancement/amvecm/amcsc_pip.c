@@ -33,6 +33,8 @@
 #include "hdr/gamut_convert.h"
 #include "amve_v2.h"
 
+#include <linux/amlogic/media/video_sink/dv_injection.h>
+
 static enum vd_format_e last_signal_type = SIGNAL_INVALID;
 static enum output_format_e target_format[VD_PATH_MAX];
 static enum hdr_type_e cur_source_format[VD_PATH_MAX];
@@ -42,10 +44,6 @@ enum output_format_e output_format;
 static uint slice_set = 0x14;
 module_param(slice_set, uint, 0664);
 MODULE_PARM_DESC(slice_set, "\n slice_set\n");
-
-static bool DV_vsif_send_in_hdmi_packet = false;
-module_param(DV_vsif_send_in_hdmi_packet, bool, 0664);
-MODULE_PARM_DESC(DV_vsif_send_in_hdmi_packet, "\n DV_vsif_send_in_hdmi_packet\n");
 
 #define INORM	50000
 static u32 bt2020_primaries[3][2] = {
@@ -2293,7 +2291,8 @@ void hdmi_packet_process(int signal_change_flag,
 			 struct cuva_hdr_vsif_para *hdmitx_vsif_param,
 			 struct cuva_hdr_vs_emds_para *hdmitx_edms_param,
 			 enum vd_path_e vd_path,
-			 enum hdr_type_e *source_type, enum vpp_index_e vpp_index)
+			 enum hdr_type_e *source_type, enum vpp_index_e vpp_index,
+			 bool dv_metadata)
 {
 	struct vout_device_s *vdev = NULL;
 	struct master_display_info_s send_info;
@@ -2513,7 +2512,7 @@ void hdmi_packet_process(int signal_change_flag,
 		return;
 	}
 
-	if (DV_vsif_send_in_hdmi_packet){
+	if (should_block_vsif(dv_metadata)){
 		return;
 	}
 

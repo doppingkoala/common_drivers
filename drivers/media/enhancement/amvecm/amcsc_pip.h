@@ -31,7 +31,8 @@ void hdmi_packet_process(int signal_change_flag,
 			 struct cuva_hdr_vs_emds_para *hdmitx_edms_param,
 			 enum vd_path_e vd_path,
 			 enum hdr_type_e *source_type,
-			 enum vpp_index_e vpp_index);
+			 enum vpp_index_e vpp_index,
+			 bool dv_metadata);
 void video_post_process(struct vframe_s *vf,
 			enum vpp_matrix_csc_e csc_type,
 			struct vinfo_s *vinfo,

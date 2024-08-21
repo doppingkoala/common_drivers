@@ -49,4 +49,5 @@ struct meson_drm_fbdev {
 };
 
 extern struct am_meson_logo logo;
+extern unsigned long last_osd_ioctl_time;
 #endif /* __AM_MESON_FBDEV_H */

@@ -146,6 +146,8 @@ MODULE_AMLOG(LOG_LEVEL_ERROR, 0, LOG_DEFAULT_LEVEL_DESC, LOG_MASK_DESC);
 #define RECEIVERPIP_NAME "videopip"
 #define RECEIVERPIP2_NAME "videopip2"
 
+#include <linux/amlogic/media/video_sink/dv_injection.h>
+
 #define PARSE_MD_IN_ADVANCE 1
 
 #ifdef CONFIG_AML_VSYNC_FIQ_ENABLE
@@ -810,7 +812,6 @@ void pre_process_for_3d(struct vframe_s *vf)
 	/*can be moved to h264mvc.c */
 	if ((vf->type & VIDTYPE_MVC) &&
 	    (process_3d_type & MODE_3D_ENABLE) && vf->trans_fmt) {
-		vf->type = VIDTYPE_PROGRESSIVE | VIDTYPE_VIU_FIELD;
 		process_3d_type |= MODE_3D_MVC;
 		mvc_flag = 1;
 	} else {
@@ -5188,6 +5189,11 @@ s32 di_request_afbc_hw(u8 id, bool on)
 }
 EXPORT_SYMBOL(di_request_afbc_hw);
 
+bool is_enable_3d_to_2d(void) {
+	return (process_3d_type & MODE_3D_ENABLE) &&
+		(process_3d_type & MODE_3D_TO_2D_MASK);
+}
+
 u32 get_video_hold_state(void)
 {
 	return hold_video;
@@ -5494,7 +5500,7 @@ bool check_av1_hdr10p(char *p)
 }
 EXPORT_SYMBOL(check_av1_hdr10p);
 
-char *check_media_sei(char *sei, u32 sei_size, u32 fmt_type, u32 *ret_size)
+static char *check_media_sei(char *sei, u32 sei_size, u32 fmt_type, u32 *ret_size)
 {
 	char *ret = NULL;
 	char *p, *cur_p;
@@ -5658,12 +5664,6 @@ s32 update_vframe_src_fmt(struct vframe_s *vf,
 				   void *sei, u32 size, bool dual_layer,
 				   char *prov_name, char *recv_name)
 {
-#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
-#if PARSE_MD_IN_ADVANCE
-	int src_fmt = -1;
-	int ret = 0;
-#endif
-#endif
 	int i;
 	char *p;
 
@@ -5676,77 +5676,11 @@ s32 update_vframe_src_fmt(struct vframe_s *vf,
 	vf->src_fmt.sei_size = size;
 	vf->src_fmt.dual_layer = false;
 	vf->src_fmt.pr_done = false;
-	if (debug_flag & DEBUG_FLAG_OMX_DV_DROP_FRAME) {
-		pr_info("===update vf %p, sei %p, size %d, dual_layer %d play_id = %d ===\n",
-			vf, sei, size, dual_layer,
-			vf->src_fmt.play_id);
-		if (sei && size > 15) {
-			p = (char *)sei;
-			for (i = 0; i < size; i += 16)
-				pr_info("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
-					p[i],
-					p[i + 1],
-					p[i + 2],
-					p[i + 3],
-					p[i + 4],
-					p[i + 5],
-					p[i + 6],
-					p[i + 7],
-					p[i + 8],
-					p[i + 9],
-					p[i + 10],
-					p[i + 11],
-					p[i + 12],
-					p[i + 13],
-					p[i + 14],
-					p[i + 15]);
-		}
-	}
 
 	if (vf->type & VIDTYPE_MVC) {
 		vf->src_fmt.fmt = VFRAME_SIGNAL_FMT_MVC;
 	} else if (sei && size) {
-		if (vf->discard_dv_data) {
-			if (debug_flag & DEBUG_FLAG_OMX_DV_DROP_FRAME)
-				pr_info("ignore nonstandard dv\n");
-		}
-#ifdef CONFIG_AMLOGIC_MEDIA_ENHANCEMENT_DOLBYVISION
-		else if (dual_layer || check_media_sei(sei, size, FMT_TYPE_DV, NULL) ||
-			   check_media_sei(sei, size, FMT_TYPE_DV_AV1, NULL)) {
-			vf->src_fmt.fmt = VFRAME_SIGNAL_FMT_DOVI;
-			vf->src_fmt.dual_layer = dual_layer;
-#if PARSE_MD_IN_ADVANCE
-			if (vf->src_fmt.md_buf && vf->src_fmt.comp_buf) {
-				if (debug_flag & DEBUG_FLAG_OMX_DV_DROP_FRAME)
-					pr_info("parse vf %p, sei %p, size %d, md_buf %p\n",
-						vf, sei, size, vf->src_fmt.md_buf);
-				ret = parse_sei_and_meta_ext
-					(vf, sei, size,
-					 &vf->src_fmt.comp_size,
-					 &vf->src_fmt.md_size,
-					 &src_fmt,
-					 &vf->src_fmt.parse_ret_flags,
-					 vf->src_fmt.md_buf,
-					 vf->src_fmt.comp_buf);
-				if (debug_flag & DEBUG_FLAG_OMX_DV_DROP_FRAME)
-					pr_info("parse ret %d, %d, %d %d, %d\n",
-						ret,
-						src_fmt,
-						vf->src_fmt.md_size,
-						vf->src_fmt.comp_size,
-						vf->src_fmt.parse_ret_flags);
-
-				if (ret) {
-					/* mark size -1 as parser failed */
-					vf->src_fmt.md_size = -1;
-					vf->src_fmt.comp_size = -1;
-				}
-			}
-#else
-			clear_vframe_dovi_md_info(vf);
-#endif
-		}
-#endif
+		update_dv_hdr_dm_pkt(sei, size, vf);
 	}
 
 	if (vf->src_fmt.fmt == VFRAME_SIGNAL_FMT_INVALID) {
@@ -5789,13 +5723,6 @@ s32 update_vframe_src_fmt(struct vframe_s *vf,
 		}
 #endif
 	}
-
-	if (vf->src_fmt.fmt != VFRAME_SIGNAL_FMT_DOVI)
-		clear_vframe_dovi_md_info(vf);
-
-	if (debug_flag & DEBUG_FLAG_OMX_DV_DROP_FRAME)
-		pr_info("[%s]fmt: %d, vf %p, sei %p\n", __func__, vf->src_fmt.fmt,
-				vf, vf->src_fmt.sei_ptr);
 
 	return 0;
 }

@@ -2151,7 +2151,7 @@ void hdmitx_set_enc_hw(struct hdmitx_dev *hdev)
 
 	set_vmode_enc_hw(hdev);
 
-	if (hdev->flag_3dfp) {
+	if (hdev->tx_comm.flag_3dfp) {
 		hd_write_reg(P_VPU_HDMI_SETTING, 0x8c);
 	} else {
 		switch (para->vic) {
@@ -2299,7 +2299,7 @@ static int hdmitx_set_dispmode(struct hdmitx_hw_common *tx_hw)
 				switch (hdev->hdmi_current_tunnel_mode) {
 					case RGB_8BIT:
 					case RGB_10_12BIT:
-						para->cs = HDMI_COLORSPACE_YUV444;
+						para->cs = HDMI_COLORSPACE_YUV422;
 						break;
 					case YUV422_BIT12:
 						para->cs = HDMI_COLORSPACE_YUV422;
@@ -2320,10 +2320,10 @@ static int hdmitx_set_dispmode(struct hdmitx_hw_common *tx_hw)
 			    strstr(tx_comm->fmt_attr, "420") == NULL &&
 			    strstr(tx_comm->fmt_attr, "422") == NULL &&
 			    strstr(tx_comm->fmt_attr, "444") == NULL) {
-				// if (is_hdmi4k_support_420(para->vic & 0xff)) {
-				// 	para->cs = HDMI_COLORSPACE_YUV420;
-				// 	HDMITX_INFO("display colour subsampling is forced to %s because of current video information code %d\n", colour_sampling[para->cs], para->vic);
-				// }
+				if (is_hdmi4k_support_420(para->vic & 0xff)) {
+					para->cs = HDMI_COLORSPACE_YUV420;
+					HDMITX_INFO("display colour subsampling is forced to %s because of current video information code %d\n", colour_sampling[para->cs], para->vic);
+				}
 				HDMITX_INFO("display colour subsampling is auto set to %s (VIC: %d)\n", colour_sampling[para->cs], para->vic);
 			}
 			break;
@@ -2340,7 +2340,7 @@ static int hdmitx_set_dispmode(struct hdmitx_hw_common *tx_hw)
 				int cd = para->cd;
 				switch (hdev->hdmi_current_tunnel_mode) {
 					case RGB_8BIT:
-							para->cd = COLORDEPTH_24B;
+							para->cd = COLORDEPTH_36B;
 						break;
 					case RGB_10_12BIT:
 					case YUV444_10_12BIT:
@@ -2390,15 +2390,20 @@ static int hdmitx_set_dispmode(struct hdmitx_hw_common *tx_hw)
 						para->cd = COLORDEPTH_24B;
 				}
 
-				// if (is_hdmi4k_support_420(para->vic & 0xff)) {
-				// 	if (para->cs == HDMI_COLORSPACE_RGB || para->cs == HDMI_COLORSPACE_YUV444) {
-				// 		para->cd = COLORDEPTH_24B;
-				// 		HDMITX_INFO("display colourdepth is forced to %d bits because of current video information code\n",
-				// 			colour_depths[para->cd - COLORDEPTH_24B]);
-				// 	}
-				// }
-				HDMITX_INFO("display colourdepth is auto set to %d bits (VIC: %d)\n",
-					colour_depths[para->cd - COLORDEPTH_24B], para->vic);
+				if (is_hdmi4k_support_420(para->vic & 0xff)) {
+					if (para->cs == HDMI_COLORSPACE_RGB || para->cs == HDMI_COLORSPACE_YUV444) {
+						para->cd = COLORDEPTH_24B;
+						HDMITX_INFO("display colourdepth is forced to %d bits because of current video information code\n",
+							colour_depths[para->cd - COLORDEPTH_24B]);
+					}
+				}
+				if (hdev->tx_comm.flag_3dfp) {
+					para->cd = COLORDEPTH_24B;
+					HDMITX_INFO("display colourdepth is auto set to %d bits because of 3dfp mode (VIC: %d)\n",
+						colour_depths[para->cd - COLORDEPTH_24B], para->vic);
+				} else
+					HDMITX_INFO("display colourdepth is auto set to %d bits (VIC: %d)\n",
+						colour_depths[para->cd - COLORDEPTH_24B], para->vic);
 			}
 			break;
 	}
@@ -2427,7 +2432,7 @@ static int hdmitx_set_dispmode(struct hdmitx_hw_common *tx_hw)
 	}
 	HDMITX_DEBUG("adjust decouple fifo\n");
 	/* For 3D, enable phy by SystemControl at last step */
-	if (!hdev->flag_3dfp && !hdev->flag_3dtb && !hdev->flag_3dss)
+	if (!hdev->tx_comm.flag_3dfp && !hdev->tx_comm.flag_3dtb && !hdev->tx_comm.flag_3dss)
 		hdmitx_set_phy(hdev);
 	return 0;
 }
@@ -6382,7 +6387,7 @@ static void config_hdmi20_tx(enum hdmi_vic vic,
 	data32  = (t->h_blank >> 8) & 0x1f;
 	hdmitx_wr_reg(HDMITX_DWC_FC_INHBLANK1,  data32);
 
-	if (hdev->flag_3dfp) {
+	if (hdev->tx_comm.flag_3dfp) {
 		data32 = v_active * 2 + t->v_blank;
 		hdmitx_wr_reg(HDMITX_DWC_FC_INVACTV0, data32 & 0xff);
 		hdmitx_wr_reg(HDMITX_DWC_FC_INVACTV1, (data32 >> 8) & 0x1f);
@@ -6598,7 +6603,7 @@ static void config_hdmi20_tx(enum hdmi_vic vic,
 	}
 
 	/* If RX  support 3D, then enable 3D send out */
-	if (hdev->flag_3dfp || hdev->flag_3dtb || hdev->flag_3dss) {
+	if (hdev->tx_comm.flag_3dfp || hdev->tx_comm.flag_3dtb || hdev->tx_comm.flag_3dss) {
 		hdmitx_set_reg_bits(HDMITX_DWC_FC_DATAUTO0, 1, 3, 1);
 		hdmitx_set_reg_bits(HDMITX_DWC_FC_PACKET_TX_EN, 1, 4, 1);
 	} else {

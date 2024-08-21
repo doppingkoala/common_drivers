@@ -243,4 +243,5 @@ void osd_set_sc_depend(u32 osd_sc_depend);
 void osd_get_fence_count(u32 index, u32 *fence_cnt, u32 *timeline_cnt);
 int get_encp_line(u32 viu_type);
 u32 get_cur_begin_line(u32 output_index);
+bool is_osd_panned(void);
 #endif

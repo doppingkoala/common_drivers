@@ -976,8 +976,13 @@ static int hdmitx_set_dispmode(struct hdmitx_hw_common *tx_hw)
 							colour_depths[para->cd - COLORDEPTH_24B]);
 					}
 				}
-				HDMITX_INFO("display colourdepth is auto set to %d bits (VIC: %d)\n",
-					colour_depths[para->cd - COLORDEPTH_24B], vic);
+				if (hdev->tx_comm.flag_3dfp) {
+					para->cd = COLORDEPTH_24B;
+					HDMITX_INFO("display colourdepth is auto set to %d bits because of 3dfp mode (VIC: %d)\n",
+						colour_depths[para->cd - COLORDEPTH_24B], vic);
+				} else
+					HDMITX_INFO("display colourdepth is auto set to %d bits (VIC: %d)\n",
+						colour_depths[para->cd - COLORDEPTH_24B], vic);
 			}
 			break;
 	}
@@ -1295,7 +1300,7 @@ static enum hdmi_tf_type hdmitx21_get_cur_dv_st(void)
 	union hdmi_infoframe info;
 	/* struct hdmi_vendor_infoframe *vend = (struct hdmi_vendor_infoframe *)&info; */
 	struct hdmitx_dev *hdev = get_hdmitx21_device();
-	struct hdmi_format_para *para = hdev->para;
+	struct hdmi_format_para *para = &hdev->tx_comm.fmt_para;
 	unsigned int ieee_code = 0;
 	unsigned int size = 0;
 	enum hdmi_colorspace cs = 0;

@@ -7695,6 +7695,10 @@ static void osd_pan_display_layers_fence_viu2
 }
 #endif
 
+bool is_osd_panned(void){
+	return (osd_hw.pandata[0].y_start == 0) ? false : true;
+}
+
 void osd_pan_display_hw(u32 index, unsigned int xoffset, unsigned int yoffset)
 {
 	long diff_x, diff_y;

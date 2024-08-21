@@ -8614,6 +8614,7 @@ static int vpp_matrix_update(struct vframe_s *vf,
 	int hdmi_scs_type_changed = 0;
 	bool hdr10p_meta_updated = false;
 	bool cuva_meta_updated = false;
+	bool dv_metadata = false;
 	enum hdr_type_e source_format[VD_PATH_MAX];
 	static struct hdr10plus_para *para;
 	static int signal_change_latch;
@@ -8779,6 +8780,13 @@ static int vpp_matrix_update(struct vframe_s *vf,
 		}
 	}
 
+
+	if(vf){
+		dv_metadata = (vf->src_fmt.fmt == VFRAME_SIGNAL_FMT_DOVI) ? true : false;
+	} else {
+		dv_metadata = false;
+	}
+
 #ifdef T7_BRINGUP_MULTI_VPP
 	if (get_cpu_type() == MESON_CPU_MAJOR_ID_T7) {
 		// TODO
@@ -8795,7 +8803,8 @@ static int vpp_matrix_update(struct vframe_s *vf,
 			&hdmitx_hdr10plus_params[vd_path] : NULL;
 			hdmi_packet_process(signal_change_flag, vinfo, p,
 					    para,
-					    vd_path, source_format, vpp_index);
+					    vd_path, source_format, vpp_index,
+						dv_metadata);
 		}
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 	} else {
@@ -8829,7 +8838,8 @@ static int vpp_matrix_update(struct vframe_s *vf,
 					    &hdmitx_vsif_params[vd_path] : NULL,
 					    cuva_meta_updated ?
 					    &hdmitx_edms_params[vd_path] : NULL,
-					    vd_path, source_format, vpp_index);
+					    vd_path, source_format, vpp_index,
+						dv_metadata);
 		}
 #ifndef CONFIG_AMLOGIC_ZAPPER_CUT
 	} else {

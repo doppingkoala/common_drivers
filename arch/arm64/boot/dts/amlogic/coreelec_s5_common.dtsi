@@ -13,10 +13,6 @@
 	};
 
 	reserved-memory {
-		codec_mm_cma:linux,codec_mm_cma {
-			size = <0x0 0x4b000000>;
-		};
-
 		di_cma_reserved:linux,di_cma {
 			size = <0x0 0x400000>;
 		};
@@ -27,6 +23,19 @@
 
 		ion_fb_reserved:linux,ion-fb {
 			alloc-ranges = <0x0 0x0 0x0 0xe0000000>;
+		};
+
+		secmon_reserved:linux,secmon {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x0 0x400000>;
+			alloc-ranges = <0x0 0x05000000 0x0 0x00400000>;
+			/delete-property/ no-map;
+			/delete-property/ reg;
+		};
+
+		camera_cma_reserved:linux,camera_cma {
+			status = "disable";
 		};
 
 		pcie_dma_ops_mm:linux,pcie_dma_ops {
@@ -180,4 +189,8 @@
 &vddq_reg {
 	/delete-property/ pinctrl-names;
 	/delete-property/ gpio;
+};
+
+&aml_wifi {
+	wifi_static_buf = <2>;  /* dhd wifi for android */
 };

@@ -230,6 +230,8 @@ am_meson_drm_fbdev_setcolreg(unsigned int regno, unsigned int red, unsigned int 
 	return 0;
 }
 
+unsigned long last_osd_ioctl_time = INITIAL_JIFFIES;
+
 static int am_meson_drm_fbdev_ioctl(struct fb_info *info,
 				    unsigned int cmd, unsigned long arg)
 {
@@ -243,6 +245,8 @@ static int am_meson_drm_fbdev_ioctl(struct fb_info *info,
 
 	memset(&fbdma, 0, sizeof(fbdma));
 	MESON_DRM_FBDEV("%s CMD   [%x] - [%d] IN\n", __func__, cmd, plane->index);
+
+	last_osd_ioctl_time = jiffies;
 
 	/*amlogic fbdev ioctl, used by gpu fbdev backend.*/
 	if (cmd == FBIOGET_OSD_DMABUF) {

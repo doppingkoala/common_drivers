@@ -80,7 +80,6 @@ static struct class *hdmitx_class;
 static void hdmitx_set_drm_pkt(struct master_display_info_s *data);
 static void hdmitx_set_vsif_pkt(enum eotf_type type, enum mode_type
 	tunnel_mode, struct dv_vsif_para *data, bool signal_sdr);
-static void send_tvled_DV_vsif(void);
 static void hdmitx_set_hdr10plus_pkt(unsigned int flag,
 				     struct hdr10plus_para *data);
 static void hdmitx_set_cuva_hdr_vsif(struct cuva_hdr_vsif_para *data);
@@ -95,6 +94,7 @@ const struct hdmi_timing *hdmitx_mode_match_timing_name(const char *name);
 static void hdmitx_notify_hpd_to_rx(int hpd, void *p);
 
 bool dovi_tv_led_bt2020 = false;
+bool dovi_tv_led_no_colorimetry = false;
 
 static inline int com_str(const char *buf, const char *str)
 {
@@ -168,7 +168,6 @@ struct vout_device_s hdmitx_vdev = {
 	.fresh_tx_cuva_hdr_vsif = hdmitx_set_cuva_hdr_vsif,
 	.fresh_tx_cuva_hdr_vs_emds = hdmitx_set_cuva_hdr_vs_emds,
 	.fresh_tx_emp_pkt = hdmitx_set_emp_pkt,
-	.send_tvled_DV_vsif = send_tvled_DV_vsif,
 };
 
 int hdmitx_set_uevent_state(enum hdmitx_event type, int state)
@@ -352,43 +351,6 @@ static ssize_t disp_mode_store(struct device *dev,
 			       struct device_attribute *attr,
 			       const char *buf, size_t count)
 {
-
-	if (strstr(buf, "DV_enable") || strstr(buf, "DV_disable") || strstr(buf, "DV_rgb_only")){
-		pr_info("Doing DV stuff\n");
-
-		struct hdmitx_dev *hdev = get_hdmitx_device();
-		struct hdmitx_common *tx_comm = &hdev->tx_comm;
-		struct hdmitx_hw_common *tx_hw_base = &hdev->tx_hw.base;
-
-		unsigned long flags = 0;
-
-		if (strstr(buf, "DV_enable")){
-			pr_info("Enabling DV VSIF\n");
-			send_tvled_DV_vsif();
-		
-		} else if (strstr(buf, "DV_disable_vsif")){
-			pr_info("Disabling DV VSIF\n");
-			spin_lock_irqsave(&hdev->tx_comm.edid_spinlock, flags);
-
-			hdmitx_hw_disable_packet(tx_hw_base, HDMI_PACKET_VEND);
-
-			spin_unlock_irqrestore(&hdev->tx_comm.edid_spinlock, flags);
-
-
-		} else if (strstr(buf,"DV_rgb_only")){
-			pr_info("Setting avi packet to RGB\n");
-			spin_lock_irqsave(&hdev->tx_comm.edid_spinlock, flags);
-			hdmitx_hw_cntl_config(&hdev->tx_hw.base, CONF_AVI_RGBYCC_INDIC,	HDMI_COLORSPACE_RGB);
-			hdmitx_hw_cntl_config(&hdev->tx_hw.base, CONF_AVI_Q01, RGB_RANGE_FUL);
-			spin_unlock_irqrestore(&hdev->tx_comm.edid_spinlock, flags);
-
-		} else {
-			pr_info("Unknown command\n");
-		}
-			
-		return count;
-	}
-
 	struct hdmitx_dev *hdev = dev_get_drvdata(dev);
 
 	set_disp_mode(hdev, buf);
@@ -1371,83 +1333,6 @@ static void hdmitx_set_vsif_pkt(enum eotf_type type,
 	spin_unlock_irqrestore(&hdev->tx_comm.edid_spinlock, flags);
 }
 
-void send_tvled_DV_vsif(void){
-	struct hdmitx_dev *hdev = get_hdmitx_device();
-	struct hdmitx_common *tx_comm = &hdev->tx_comm;
-	struct hdmitx_hw_common *tx_hw_base = &hdev->tx_hw.base;
-	unsigned long flags = 0;
-	unsigned char VEN_HB[3] = {0x81, 0x01};
-	unsigned char VEN_DB1[24] = {0x00};
-	unsigned char VEN_DB2[27] = {0x00};
-	unsigned char len = 0;
-	unsigned int vic = tx_comm->fmt_para.vic;
-	unsigned int hdmi_vic_4k_flag = 0;
-	bool use_older_version;
-
-	spin_lock_irqsave(&hdev->tx_comm.edid_spinlock, flags);
-
-	use_older_version = ((hdev->tx_comm.rxcap.dv_info.ver == 0) || ((hdev->tx_comm.rxcap.dv_info.ver == 1) && (hdev->tx_comm.rxcap.dv_info.length == 0xE)));
-
-	/*ver0 and ver1_15 and ver1_12bit with ll= 0 use hdmi 1.4b VSIF*/
-	if (use_older_version){
-		if ((vic == HDMI_95_3840x2160p30_16x9) ||
-		    (vic == HDMI_94_3840x2160p25_16x9) ||
-		    (vic == HDMI_93_3840x2160p24_16x9) ||
-		    (vic == HDMI_98_4096x2160p24_256x135)){
-			hdmi_vic_4k_flag = 1;
-		}
-		len = 0x18;
-		VEN_HB[2] = len;
-		VEN_DB1[0] = 0x03;
-		VEN_DB1[1] = 0x0c;
-		VEN_DB1[2] = 0x00;
-		VEN_DB1[3] = 0x00;
-		if (hdmi_vic_4k_flag) {
-			VEN_DB1[3] = 0x20;
-			if (vic == HDMI_95_3840x2160p30_16x9)
-				VEN_DB1[4] = 0x1;
-			else if (vic == HDMI_94_3840x2160p25_16x9)
-				VEN_DB1[4] = 0x2;
-			else if (vic == HDMI_93_3840x2160p24_16x9)
-				VEN_DB1[4] = 0x3;
-			else/*vic == HDMI_98_4096x2160p24_256x135*/
-				VEN_DB1[4] = 0x4;
-		}
-		VEN_DB1[5] = 0x00;
-		VEN_DB1[6] = 0x00;
-		VEN_DB1[7] = 0x00;
-		VEN_DB1[8] = 0x00;
-	} else {
-		// version 2
-		len = 0x1b;
-		VEN_HB[2] = len;
-		VEN_DB2[0] = 0x46;
-		VEN_DB2[1] = 0xd0;
-		VEN_DB2[2] = 0x00;
-		VEN_DB2[3] = 0x02;
-		VEN_DB2[4] = 0x00;
-		VEN_DB2[5] = 0x00;
-		VEN_DB2[6] = 0x00;
-		VEN_DB2[7] = 0x00;
-		VEN_DB2[8] = 0x00;
-	}
-
-	/*first disable drm package*/
-	hdmitx_hw_set_packet(tx_hw_base, HDMI_PACKET_VEND, VEN_DB1, VEN_HB);
-	if(use_older_version){
-		hdmitx_hw_set_packet(tx_hw_base, HDMI_PACKET_VEND, VEN_DB1, VEN_HB);
-	} else {
-		hdmitx_hw_set_packet(tx_hw_base, HDMI_PACKET_VEND, VEN_DB2, VEN_HB);
-	}
-
-	hdmitx_hw_cntl_config(&hdev->tx_hw.base, CONF_AVI_BT2020, 0x2); // should be SET_AVI_NO_CM, but that isn;t defined ...
-	hdmitx_hw_cntl_config(&hdev->tx_hw.base, CONF_AVI_RGBYCC_INDIC,	HDMI_COLORSPACE_RGB);
-	hdmitx_hw_cntl_config(&hdev->tx_hw.base, CONF_AVI_Q01, RGB_RANGE_FUL);
-
-	spin_unlock_irqrestore(&hdev->tx_comm.edid_spinlock, flags);
-
-}
-
 struct hdr10plus_para hdr10p_config_data;
 struct hdr10plus_para hsty_hdr10p_config_data[8];
 unsigned int hsty_hdr10p_config_loc, hsty_hdr10p_config_num;
@@ -1884,32 +1769,32 @@ static ssize_t config_store(struct device *dev,
 	if (strncmp(buf, "3d", 2) == 0) {
 		/* Second, set 3D parameters */
 		if (strncmp(buf + 2, "tb", 2) == 0) {
-			hdev->flag_3dtb = 1;
-			hdev->flag_3dss = 0;
-			hdev->flag_3dfp = 0;
+			hdev->tx_comm.flag_3dtb = 1;
+			hdev->tx_comm.flag_3dss = 0;
+			hdev->tx_comm.flag_3dfp = 0;
 			hdmi_set_3d(hdev, T3D_TAB, 0);
 		} else if ((strncmp(buf + 2, "lr", 2) == 0) ||
 			(strncmp(buf + 2, "ss", 2) == 0)) {
 			unsigned long sub_sample_mode = 0;
 
-			hdev->flag_3dtb = 0;
-			hdev->flag_3dss = 1;
-			hdev->flag_3dfp = 0;
-			if (buf[2])
-				ret = kstrtoul(buf + 2, 10,
+			hdev->tx_comm.flag_3dtb = 0;
+			hdev->tx_comm.flag_3dss = 1;
+			hdev->tx_comm.flag_3dfp = 0;
+			if (buf[4])
+				ret = kstrtoul(buf + 4, 10,
 					       &sub_sample_mode);
 			/* side by side */
 			hdmi_set_3d(hdev, T3D_SBS_HALF,
 				    sub_sample_mode);
 		} else if (strncmp(buf + 2, "fp", 2) == 0) {
-			hdev->flag_3dtb = 0;
-			hdev->flag_3dss = 0;
-			hdev->flag_3dfp = 1;
+			hdev->tx_comm.flag_3dtb = 0;
+			hdev->tx_comm.flag_3dss = 0;
+			hdev->tx_comm.flag_3dfp = 1;
 			hdmi_set_3d(hdev, T3D_FRAME_PACKING, 0);
 		} else if (strncmp(buf + 2, "off", 3) == 0) {
-			hdev->flag_3dfp = 0;
-			hdev->flag_3dtb = 0;
-			hdev->flag_3dss = 0;
+			hdev->tx_comm.flag_3dfp = 0;
+			hdev->tx_comm.flag_3dtb = 0;
+			hdev->tx_comm.flag_3dss = 0;
 			hdmi_set_3d(hdev, T3D_DISABLE, 0);
 		}
 	} else if (strncmp(buf, "sdr", 3) == 0) {
@@ -2890,11 +2775,11 @@ static ssize_t hdmitx_basic_config_show(struct device *dev,
 
 	pos += hdmitx_audio_para_print(&hdev->tx_comm.cur_audio_param, buf + pos);
 
-	if (hdev->flag_3dfp)
+	if (hdev->tx_comm.flag_3dfp)
 		conf = "FramePacking";
-	else if (hdev->flag_3dss)
+	else if (hdev->tx_comm.flag_3dss)
 		conf = "SidebySide";
-	else if (hdev->flag_3dtb)
+	else if (hdev->tx_comm.flag_3dtb)
 		conf = "TopButtom";
 	else
 		conf = "off";
@@ -3664,9 +3549,9 @@ static int amhdmitx_device_init(struct hdmitx_dev *hdmi_dev)
 	/* enable or disable HDMITX SSPLL, enable by default */
 	hdmi_dev->sspll = 1;
 
-	hdmi_dev->flag_3dfp = 0;
-	hdmi_dev->flag_3dss = 0;
-	hdmi_dev->flag_3dtb = 0;
+	hdmi_dev->tx_comm.flag_3dfp = 0;
+	hdmi_dev->tx_comm.flag_3dss = 0;
+	hdmi_dev->tx_comm.flag_3dtb = 0;
 
 	/* default audio configure is on */
 	hdmi_dev->tx_comm.cur_audio_param.aud_output_en = 1;

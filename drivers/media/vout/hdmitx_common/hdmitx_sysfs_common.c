@@ -694,6 +694,138 @@ static ssize_t disp_cap_show(struct device *dev,
 
 static DEVICE_ATTR_RO(disp_cap);
 
+/**/
+static int local_support_3dfp(enum hdmi_vic vic)
+{
+	switch (vic) {
+	case HDMI_19_1280x720p50_16x9:
+	case HDMI_4_1280x720p60_16x9:
+	case HDMI_32_1920x1080p24_16x9:
+	case HDMI_33_1920x1080p25_16x9:
+	case HDMI_34_1920x1080p30_16x9:
+	case HDMI_31_1920x1080p50_16x9:
+	case HDMI_16_1920x1080p60_16x9:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+static ssize_t disp_cap_3d_show(struct device *dev,
+			     struct device_attribute *attr,
+			     char *buf)
+{
+	struct rx_cap *prxcap = &global_tx_common->rxcap;
+	const struct hdmi_timing *timing = NULL;
+	enum hdmi_vic vic;
+	int i, pos = 0;
+	int vic_len = prxcap->VIC_count + VESA_MAX_TIMING;
+	int *edid_vics = vmalloc(vic_len * sizeof(int));
+
+	memset(edid_vics, 0, vic_len * sizeof(int));
+
+	/*copy edid vic list*/
+	if (prxcap->VIC_count > 0)
+		memcpy(edid_vics, prxcap->VIC, sizeof(int) * prxcap->VIC_count);
+	for (i = 0; i < VESA_MAX_TIMING && prxcap->vesa_timing[i]; i++)
+		edid_vics[prxcap->VIC_count + i] = prxcap->vesa_timing[i];
+
+	for (i = 0; i < vic_len; i++) {
+		vic = edid_vics[i];
+		if (vic == HDMI_0_UNKNOWN)
+			continue;
+
+		if (vic == HDMI_2_720x480p60_4x3 ||
+			vic == HDMI_6_720x480i60_4x3 ||
+			vic == HDMI_17_720x576p50_4x3 ||
+			vic == HDMI_21_720x576i50_4x3) {
+			if (hdmitx_edid_validate_mode(prxcap, vic + 1) == true) {
+				/*HDMITX_INFO("%s: check vic exist, handle [%d] later.\n",
+				 *	__func__, vic + 1);
+				 */
+				continue;
+			}
+		}
+
+		timing = hdmitx_mode_vic_to_hdmi_timing(vic);
+		if (!timing) {
+			// HDMITX_ERROR("%s: unsupport vic [%d]\n", __func__, vic);
+			continue;
+		}
+
+		if (hdmitx_common_validate_vic(global_tx_common, vic) != 0) {
+			// HDMITX_ERROR("%s: vic[%d] over range.\n", __func__, vic);
+			continue;
+		}
+
+		if ((local_support_3dfp(vic) &&
+		    (prxcap->support_3d_format[vic].frame_packing == 1)) ||
+		     prxcap->support_3d_format[vic].top_and_bottom == 1 ||
+		     prxcap->support_3d_format[vic].side_by_side == 1) {
+			pos += snprintf(buf+pos, PAGE_SIZE, "%s",
+				timing->sname ? timing->sname : timing->name);
+			if (local_support_3dfp(vic) &&
+			    (prxcap->support_3d_format[vic].frame_packing == 1)) {
+				pos += snprintf(buf + pos, PAGE_SIZE, " FramePacking");
+			}
+			if (prxcap->support_3d_format[vic].top_and_bottom == 1) {
+				pos += snprintf(buf + pos, PAGE_SIZE, " TopBottom");
+			}
+			if (prxcap->support_3d_format[vic].side_by_side == 1) {
+				pos += snprintf(buf + pos, PAGE_SIZE, " SidebySide");
+			}
+			pos += snprintf(buf+pos, PAGE_SIZE, "\n");
+		}
+	}
+
+	vfree(edid_vics);
+	return pos;
+}
+
+static DEVICE_ATTR_RO(disp_cap_3d);
+
+static ssize_t stereo_mode_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	// enum from xbmc/rendering/RenderSystemTypes.h
+	enum RENDER_STEREO_MODE
+	{
+	  RENDER_STEREO_MODE_OFF,
+	  RENDER_STEREO_MODE_SPLIT_HORIZONTAL,
+	  RENDER_STEREO_MODE_SPLIT_VERTICAL,
+	  RENDER_STEREO_MODE_ANAGLYPH_RED_CYAN,
+	  RENDER_STEREO_MODE_ANAGLYPH_GREEN_MAGENTA,
+	  RENDER_STEREO_MODE_ANAGLYPH_YELLOW_BLUE,
+	  RENDER_STEREO_MODE_INTERLACED,
+	  RENDER_STEREO_MODE_CHECKERBOARD,
+	  RENDER_STEREO_MODE_HARDWAREBASED,
+	  RENDER_STEREO_MODE_MONO,
+	  RENDER_STEREO_MODE_COUNT,
+
+	  // Pseudo modes
+	  RENDER_STEREO_MODE_AUTO = 100,
+	  RENDER_STEREO_MODE_UNDEFINED = 999,
+	};
+	int pos = 0;
+
+	if (global_tx_common->flag_3dtb)
+		pos += snprintf(buf, PAGE_SIZE, "%d\n",
+			RENDER_STEREO_MODE_SPLIT_HORIZONTAL);
+	else if (global_tx_common->flag_3dss)
+		pos += snprintf(buf, PAGE_SIZE, "%d\n",
+			RENDER_STEREO_MODE_SPLIT_VERTICAL);
+	else if (global_tx_common->flag_3dfp)
+		pos += snprintf(buf, PAGE_SIZE, "%d\n",
+			RENDER_STEREO_MODE_HARDWAREBASED);
+	else
+		pos += snprintf(buf, PAGE_SIZE, "%d\n",
+			RENDER_STEREO_MODE_OFF);
+
+	return pos;
+}
+
+static DEVICE_ATTR_RO(stereo_mode);
+
 /* cea_cap, a clone of disp_cap */
 static ssize_t cea_cap_show(struct device *dev,
 			    struct device_attribute *attr,
@@ -1138,6 +1270,8 @@ int hdmitx_sysfs_common_create(struct device *dev,
 	ret = device_create_file(dev, &dev_attr_edid_parsing);
 	ret = device_create_file(dev, &dev_attr_edid);
 	ret = device_create_file(dev, &dev_attr_disp_cap);
+	ret = device_create_file(dev, &dev_attr_disp_cap_3d);
+	ret = device_create_file(dev, &dev_attr_stereo_mode);
 	ret = device_create_file(dev, &dev_attr_preferred_mode);
 	ret = device_create_file(dev, &dev_attr_cea_cap);
 	ret = device_create_file(dev, &dev_attr_vesa_cap);
@@ -1180,6 +1314,8 @@ int hdmitx_sysfs_common_destroy(struct device *dev)
 	device_remove_file(dev, &dev_attr_edid_parsing);
 	device_remove_file(dev, &dev_attr_edid);
 	device_remove_file(dev, &dev_attr_disp_cap);
+	device_remove_file(dev, &dev_attr_disp_cap_3d);
+	device_remove_file(dev, &dev_attr_stereo_mode);
 	device_remove_file(dev, &dev_attr_preferred_mode);
 	device_remove_file(dev, &dev_attr_cea_cap);
 	device_remove_file(dev, &dev_attr_vesa_cap);

@@ -14,6 +14,7 @@ $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_DUMMY_PROVIDER) += video_sink/dummy_
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEO) += video_sink/video_trace.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEO) += video_sink/video_common.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEOCAPTURE) += video_sink/amvideocap.o
+$(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEO) += video_sink/dv_injection.o
 else
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEO) += video_sink/video.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEO) += video_sink/video_func.o
@@ -34,4 +35,5 @@ $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEO) += video_sink/video_hw_s5.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEO) += video_sink/vpp_post_s5.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEO) += video_sink/video_reg_s5.o
 $(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEOCAPTURE) += video_sink/amvideocap.o
+$(MEDIA_MODULE_NAME)-$(CONFIG_AMLOGIC_MEDIA_VIDEO) += video_sink/dv_injection.o
 endif

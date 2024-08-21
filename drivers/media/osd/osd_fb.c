@@ -448,6 +448,9 @@ static void osddev_setup(struct osd_fb_dev_s *fbdev)
 static void osddev_update_disp_axis(struct osd_fb_dev_s *fbdev,
 				    int mode_change)
 {
+
+	pr_info("In %s\n", __func__);
+
 	osd_update_disp_axis_hw(fbdev->fb_info->node,
 				fbdev->osd_ctl.disp_start_x,
 				fbdev->osd_ctl.disp_end_x,
